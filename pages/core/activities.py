@@ -222,7 +222,7 @@ def render_activity_management(activity: dict, user_id: str):
             if st.button("💾 Mettre à jour le statut"):
                 try:
                     ActivityQueries.update_activity(activity['id'], {'status': new_status})
-                    st.success(f"✅ Statut mis à jour : {ACTIVITY_STATUS_LABELS.get(new_status)}")
+                    st.toast(f"✅ Statut mis à jour: {ACTIVITY_STATUS_LABELS.get(new_status)}", icon="✅")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erreur : {str(e)}")
@@ -238,50 +238,99 @@ def render_activity_management(activity: dict, user_id: str):
             if not registrations:
                 st.info("Aucune inscription pour le moment.")
             else:
-                # Grouper par arme
-                from utils.helpers import group_by_category
+                # Grouper les inscriptions par joueur
+                players_registrations = {}
                 
                 for registration in registrations:
+                    user_id_reg = registration.get('user_id')
+                    user_data = registration.get('users_profiles', {})
+                    username = user_data.get('username', 'N/A') if isinstance(user_data, dict) else 'N/A'
+                    
+                    if user_id_reg not in players_registrations:
+                        players_registrations[user_id_reg] = {
+                            'username': username,
+                            'registrations': []
+                        }
+                    
                     weapon_data = registration.get('weapons', {})
                     weapon_name = weapon_data.get('name', 'N/A') if isinstance(weapon_data, dict) else 'N/A'
                     weapon_category = weapon_data.get('category', 'N/A') if isinstance(weapon_data, dict) else 'N/A'
                     
-                    user_data = registration.get('users_profiles', {})
-                    username = user_data.get('username', 'N/A') if isinstance(user_data, dict) else 'N/A'
+                    players_registrations[user_id_reg]['registrations'].append({
+                        'id': registration.get('id'),
+                        'weapon_id': registration.get('weapon_id'),
+                        'weapon_name': weapon_name,
+                        'category': weapon_category,
+                        'priority': registration.get('priority', 1),
+                        'notes': registration.get('notes')
+                    })
+                
+                # Afficher chaque joueur avec ses propositions
+                st.info(f"📊 {len(players_registrations)} joueur(s) inscrit(s)")
+                
+                for player_user_id, player_data in players_registrations.items():
+                    # Vérifier si ce joueur est déjà assigné
+                    is_assigned = any(a.get('user_id') == player_user_id for a in assignments)
+                    assigned_weapon = None
                     
-                    col_user, col_weapon, col_priority, col_action = st.columns([2, 2, 1, 1])
+                    if is_assigned:
+                        assigned_weapon = next(
+                            (a.get('weapons', {}).get('name') for a in assignments if a.get('user_id') == player_user_id),
+                            None
+                        )
                     
-                    with col_user:
-                        st.write(f"**{username}**")
-                    
-                    with col_weapon:
-                        st.write(f"⚔️ {weapon_name}")
-                        st.caption(weapon_category)
-                    
-                    with col_priority:
-                        st.write(f"Priorité {registration.get('priority', 1)}")
-                    
-                    with col_action:
-                        # Vérifier si déjà assigné
-                        is_assigned = any(a.get('user_id') == registration.get('user_id') for a in assignments)
+                    with st.container():
+                        # En-tête du joueur
+                        col_player, col_status = st.columns([3, 1])
                         
-                        if is_assigned:
-                            st.success("✅ Assigné")
-                        else:
-                            if st.button("➕ Assigner", key=f"assign_{registration['id']}"):
-                                try:
-                                    AssignmentQueries.create_assignment(
-                                        activity_id=activity['id'],
-                                        user_id=registration.get('user_id'),
-                                        weapon_id=registration.get('weapon_id'),
-                                        assigned_by=user_id
-                                    )
-                                    st.success("✅ Assignation créée !")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erreur : {str(e)}")
-                    
-                    st.markdown("---")
+                        with col_player:
+                            if is_assigned:
+                                st.markdown(f"### 👤 {player_data['username']} ✅ Assigné: {assigned_weapon}")
+                            else:
+                                st.markdown(f"### 👤 {player_data['username']}")
+                        
+                        with col_status:
+                            if is_assigned:
+                                st.success("✅ Assigné")
+                        
+                        # Afficher les propositions d'armes triées par priorité
+                        player_regs = sorted(player_data['registrations'], key=lambda x: x['priority'])
+                        
+                        for reg in player_regs:
+                            col_prio, col_weapon, col_action = st.columns([1, 3, 1])
+                            
+                            with col_prio:
+                                priority = reg['priority']
+                                if priority == 1:
+                                    st.markdown("**✅ Priorité 1**")
+                                else:
+                                    st.markdown(f"⭐ Priorité {priority}")
+                            
+                            with col_weapon:
+                                st.write(f"⚔️ **{reg['weapon_name']}** ({reg['category']})")
+                                if reg['notes'] and priority == 1:
+                                    st.caption(f"📝 {reg['notes']}")
+                            
+                            with col_action:
+                                if not is_assigned:
+                                    if st.button(
+                                        f"➕ Assigner", 
+                                        key=f"assign_{reg['id']}", 
+                                        use_container_width=True
+                                    ):
+                                        try:
+                                            AssignmentQueries.create_assignment(
+                                                activity_id=activity['id'],
+                                                user_id=player_user_id,
+                                                weapon_id=reg['weapon_id'],
+                                                assigned_by=user_id
+                                            )
+                                            st.toast("✅ Assignation créée!", icon="✅")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ Erreur : {str(e)}")
+                        
+                        st.markdown("---")
         
         with tab_assign:
             st.subheader("Assignations finales")
@@ -308,7 +357,7 @@ def render_activity_management(activity: dict, user_id: str):
                         if st.button("🗑️", key=f"unassign_{assignment['id']}"):
                             try:
                                 AssignmentQueries.delete_assignment(assignment['id'])
-                                st.success("✅ Assignation supprimée !")
+                                st.toast("🗑️ Assignation supprimée!", icon="🗑️")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Erreur : {str(e)}")

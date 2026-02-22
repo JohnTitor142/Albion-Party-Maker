@@ -118,7 +118,7 @@ def render_user_card(user: dict):
             if st.button(action_label, key=f"toggle_status_{user['id']}", use_container_width=True):
                 try:
                     UserQueries.update_profile(user['id'], {'is_active': not current_status})
-                    st.success(f"✅ Statut mis à jour pour {user.get('username')}")
+                    st.toast(f"✅ Statut mis à jour pour {user.get('username')}", icon="✅")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erreur : {str(e)}")
@@ -154,7 +154,7 @@ def show_edit_role_form(user: dict):
             
             try:
                 UserQueries.update_profile(user['id'], {'role': new_role})
-                st.success(f"✅ Rôle mis à jour pour {user.get('username')} : {new_role}")
+                st.toast(f"✅ Rôle mis à jour: {new_role}", icon="✅")
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Erreur : {str(e)}")

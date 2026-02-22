@@ -77,8 +77,16 @@ def render_available_activities(user_id: str):
                     if is_registered:
                         st.success("✅ Inscrit")
                     else:
-                        if st.button("➕ S'inscrire", key=f"register_{activity['id']}", use_container_width=True):
-                            show_registration_form(activity, user_id)
+                        # Utiliser une clé unique dans session_state pour chaque activité
+                        register_key = f"show_register_{activity['id']}"
+                        
+                        if st.button("➕ S'inscrire", key=f"btn_register_{activity['id']}", use_container_width=True):
+                            st.session_state[register_key] = True
+                            st.rerun()
+                
+                # Afficher le formulaire si l'utilisateur a cliqué sur S'inscrire
+                if st.session_state.get(f"show_register_{activity['id']}", False):
+                    show_registration_form(activity, user_id)
                 
                 st.markdown("---")
     
@@ -88,77 +96,90 @@ def render_available_activities(user_id: str):
 
 def show_registration_form(activity: dict, user_id: str):
     """Afficher le formulaire d'inscription."""
-    st.subheader(f"S'inscrire à : {activity.get('name')}")
-    
-    try:
-        # Récupérer les armes
-        weapons = WeaponQueries.get_all_weapons()
+    with st.expander("📝 Formulaire d'Inscription", expanded=True):
+        st.subheader(f"S'inscrire à : {activity.get('name')}")
         
-        if not weapons:
-            st.error("❌ Aucune arme disponible.")
-            return
-        
-        with st.form(f"register_form_{activity['id']}"):
-            st.info("💡 Sélectionnez jusqu'à 3 armes par ordre de préférence")
+        try:
+            # Récupérer les armes
+            weapons = WeaponQueries.get_all_weapons()
             
-            # Sélectionner jusqu'à 3 armes
-            selections = []
+            if not weapons:
+                st.error("❌ Aucune arme disponible.")
+                return
             
-            for i in range(3):
-                priority = i + 1
+            with st.form(f"register_form_{activity['id']}"):
+                st.info("💡 Sélectionnez jusqu'à 3 armes par ordre de préférence")
                 
-                col_weapon, col_notes = st.columns([2, 1])
+                # Sélectionner jusqu'à 3 armes
+                selections = []
                 
-                with col_weapon:
-                    weapon_options = {f"{w.get('name')} ({w.get('category')})": w.get('id') for w in weapons}
-                    weapon_options = {"---": None, **weapon_options}
+                for i in range(3):
+                    priority = i + 1
                     
-                    selected = st.selectbox(
-                        f"Choix #{priority}",
-                        options=list(weapon_options.keys()),
-                        key=f"weapon_{priority}_{activity['id']}"
-                    )
+                    col_weapon, col_notes = st.columns([2, 1])
                     
-                    weapon_id = weapon_options.get(selected)
-                    
-                    if weapon_id:
-                        selections.append({
-                            'weapon_id': weapon_id,
-                            'priority': priority
-                        })
-            
-            notes = st.text_area("Notes (optionnel)", placeholder="Commentaires...")
-            
-            submit = st.form_submit_button("✅ Confirmer l'inscription", use_container_width=True)
-            
-            if submit:
-                if not selections:
-                    st.error("❌ Veuillez sélectionner au moins une arme.")
-                    return
-                
-                try:
-                    # Créer les inscriptions
-                    for selection in selections:
-                        RegistrationQueries.create_registration(
-                            activity_id=activity['id'],
-                            user_id=user_id,
-                            weapon_id=selection['weapon_id'],
-                            priority=selection['priority'],
-                            notes=notes if selection['priority'] == 1 else None
+                    with col_weapon:
+                        weapon_options = {f"{w.get('name')} ({w.get('category')})": w.get('id') for w in weapons}
+                        weapon_options = {"---": None, **weapon_options}
+                        
+                        selected = st.selectbox(
+                            f"Choix #{priority}",
+                            options=list(weapon_options.keys()),
+                            key=f"weapon_{priority}_{activity['id']}"
                         )
-                    
-                    st.success(f"✅ Inscription confirmée pour '{activity.get('name')}' !")
-                    st.balloons()
+                        
+                        weapon_id = weapon_options.get(selected)
+                        
+                        if weapon_id:
+                            selections.append({
+                                'weapon_id': weapon_id,
+                                'priority': priority
+                            })
+                
+                notes = st.text_area("Notes (optionnel)", placeholder="Commentaires...")
+                
+                col_submit, col_cancel = st.columns(2)
+                
+                with col_submit:
+                    submit = st.form_submit_button("✅ Confirmer l'inscription", use_container_width=True)
+                
+                with col_cancel:
+                    cancel = st.form_submit_button("❌ Annuler", use_container_width=True)
+                
+                if cancel:
+                    # Fermer le formulaire
+                    st.session_state[f"show_register_{activity['id']}"] = False
                     st.rerun()
                 
-                except Exception as e:
-                    if "duplicate" in str(e).lower():
-                        st.error("❌ Vous êtes déjà inscrit avec cette arme.")
-                    else:
-                        st.error(f"❌ Erreur : {str(e)}")
-    
-    except Exception as e:
-        st.error(f"❌ Erreur : {str(e)}")
+                if submit:
+                    if not selections:
+                        st.error("❌ Veuillez sélectionner au moins une arme.")
+                        return
+                    
+                    try:
+                        # Créer les inscriptions
+                        for selection in selections:
+                            RegistrationQueries.create_registration(
+                                activity_id=activity['id'],
+                                user_id=user_id,
+                                weapon_id=selection['weapon_id'],
+                                priority=selection['priority'],
+                                notes=notes if selection['priority'] == 1 else None
+                            )
+                        
+                        st.toast("✅ Inscription confirmée!", icon="✅")
+                        # Fermer le formulaire et recharger
+                        st.session_state[f"show_register_{activity['id']}"] = False
+                        st.rerun()
+                    
+                    except Exception as e:
+                        if "duplicate" in str(e).lower():
+                            st.error("❌ Vous êtes déjà inscrit avec cette arme.")
+                        else:
+                            st.error(f"❌ Erreur : {str(e)}")
+        
+        except Exception as e:
+            st.error(f"❌ Erreur : {str(e)}")
 
 
 def render_my_registrations(user_id: str):
@@ -206,27 +227,63 @@ def render_my_registrations(user_id: str):
                     else:
                         st.info(status.title())
                 
-                # Afficher les armes inscrites
-                st.write("**Vos armes :**")
-                for reg in sorted(activity_regs, key=lambda x: x.get('priority', 999)):
-                    weapon_data = reg.get('weapons', {})
-                    weapon_name = weapon_data.get('name', 'N/A') if isinstance(weapon_data, dict) else 'N/A'
-                    priority = reg.get('priority', 1)
+                # Tabs: Mes armes et Autres inscrits
+                tab_my_weapons, tab_other_players = st.tabs(["⚔️ Mes Armes", "👥 Autres Inscrits"])
+                
+                with tab_my_weapons:
+                    # Afficher les armes inscrites
+                    st.write("**Vos armes :**")
+                    for reg in sorted(activity_regs, key=lambda x: x.get('priority', 999)):
+                        weapon_data = reg.get('weapons', {})
+                        weapon_name = weapon_data.get('name', 'N/A') if isinstance(weapon_data, dict) else 'N/A'
+                        priority = reg.get('priority', 1)
+                        
+                        col_weapon, col_action = st.columns([3, 1])
+                        
+                        with col_weapon:
+                            st.write(f"• Priorité {priority}: ⚔️ {weapon_name}")
+                        
+                        with col_action:
+                            if status == 'open':
+                                if st.button("🗑️", key=f"delete_reg_{reg['id']}", help="Se désinscrire"):
+                                    try:
+                                        RegistrationQueries.delete_registration(reg['id'])
+                                        st.toast("🗑️ Inscription supprimée!", icon="🗑️")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erreur : {str(e)}")
+                
+                with tab_other_players:
+                    # Afficher les autres inscrits (anonymisé par catégorie)
+                    try:
+                        all_registrations = RegistrationQueries.get_registrations_by_activity(activity_id)
+                        
+                        # Compter par catégorie (sans révéler les noms)
+                        category_counts = {}
+                        total_players = set()
+                        
+                        for reg in all_registrations:
+                            total_players.add(reg.get('user_id'))
+                            weapon_data = reg.get('weapons', {})
+                            if isinstance(weapon_data, dict):
+                                category = weapon_data.get('category', 'Autre')
+                                category_counts[category] = category_counts.get(category, 0) + 1
+                        
+                        st.info(f"📊 **{len(total_players)} joueur(s) inscrit(s)** au total (vous inclus)")
+                        
+                        st.markdown("### Répartition par catégorie d'armes")
+                        st.caption("Nombre de propositions par catégorie (1 joueur peut proposer plusieurs armes)")
+                        
+                        # Afficher les statistiques par catégorie
+                        from utils.albion_constants import CATEGORY_ICONS
+                        
+                        for category in sorted(category_counts.keys()):
+                            count = category_counts[category]
+                            icon = CATEGORY_ICONS.get(category, "⚔️")
+                            st.write(f"{icon} **{category}**: {count} proposition(s)")
                     
-                    col_weapon, col_action = st.columns([3, 1])
-                    
-                    with col_weapon:
-                        st.write(f"• Priorité {priority}: ⚔️ {weapon_name}")
-                    
-                    with col_action:
-                        if status == 'open':
-                            if st.button("🗑️", key=f"delete_reg_{reg['id']}", help="Se désinscrire"):
-                                try:
-                                    RegistrationQueries.delete_registration(reg['id'])
-                                    st.success("✅ Inscription supprimée !")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erreur : {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ Erreur : {str(e)}")
                 
                 st.markdown("---")
     

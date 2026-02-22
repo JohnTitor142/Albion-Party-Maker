@@ -119,7 +119,7 @@ def render_weapon_card(weapon: dict):
         if st.button(action_label, key=f"toggle_{weapon['id']}", help="Changer statut"):
             try:
                 WeaponQueries.update_weapon(weapon['id'], {'is_active': not current_status})
-                st.success(f"✅ Statut mis à jour pour {weapon.get('name')}")
+                st.toast(f"✅ Statut mis à jour pour {weapon.get('name')}", icon="✅")
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Erreur : {str(e)}")
@@ -203,7 +203,7 @@ def show_edit_weapon_form(weapon: dict):
                 }
                 
                 WeaponQueries.update_weapon(weapon['id'], updates)
-                st.success(f"✅ Arme '{new_name}' mise à jour !")
+                st.toast(f"✅ Arme '{new_name}' mise à jour!", icon="✅")
                 st.rerun()
             
             except Exception as e:

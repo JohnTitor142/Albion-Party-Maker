@@ -131,14 +131,15 @@ class CompositionQueries:
         return response.data[0] if response.data else None
     
     @staticmethod
-    def create_composition(name: str, description: str, created_by: str, is_template: bool = True) -> Dict[str, Any]:
+    def create_composition(name: str, description: str, created_by: str, is_template: bool = True, total_groups: int = 1) -> Dict[str, Any]:
         """Créer une nouvelle composition."""
         supabase = get_supabase()
         data = {
             "name": name,
             "description": description,
             "created_by": created_by,
-            "is_template": is_template
+            "is_template": is_template,
+            "total_groups": total_groups
         }
         response = supabase.table("compositions").insert(data).execute()
         return response.data[0] if response.data else None
@@ -161,18 +162,19 @@ class CompositionQueries:
     def get_slots_by_composition(composition_id: str) -> List[Dict[str, Any]]:
         """Récupérer les slots d'une composition."""
         supabase = get_supabase()
-        response = supabase.table("composition_slots").select("*, weapons(name)").eq("composition_id", composition_id).execute()
+        response = supabase.table("composition_slots").select("*, weapons(name)").eq("composition_id", composition_id).order("group_number").order("category").execute()
         return response.data
     
     @staticmethod
-    def create_slot(composition_id: str, weapon_id: Optional[str], category: Optional[str], quantity: int) -> Dict[str, Any]:
+    def create_slot(composition_id: str, weapon_id: Optional[str], category: Optional[str], quantity: int, group_number: int = 1) -> Dict[str, Any]:
         """Créer un slot dans une composition."""
         supabase = get_supabase()
         data = {
             "composition_id": composition_id,
             "weapon_id": weapon_id,
             "category": category,
-            "quantity": quantity
+            "quantity": quantity,
+            "group_number": group_number
         }
         response = supabase.table("composition_slots").insert(data).execute()
         return response.data[0] if response.data else None

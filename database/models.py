@@ -57,6 +57,7 @@ class Composition(BaseModel):
     description: Optional[str] = None
     created_by: str
     is_template: bool = True
+    total_groups: int = Field(default=1, ge=1, le=5)
     created_at: datetime
     updated_at: datetime
 
@@ -68,6 +69,7 @@ class CompositionSlot(BaseModel):
     weapon_id: Optional[str] = None
     category: Optional[str] = None
     quantity: int = Field(gt=0)
+    group_number: int = Field(default=1, ge=1, le=5)
     created_at: datetime
     
     # Données enrichies (non en DB)
